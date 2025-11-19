@@ -1,0 +1,153 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+from scipy.stats import pearsonr
+
+def plot_correlation_ellipses(data, p_threshold=0.05, figsize=(10, 10)):
+    """
+    Crea una matriz de correlación con elipses direccionales
+    
+    Parameters:
+    -----------
+    data : DataFrame
+        DataFrame con las variables a correlacionar
+    p_threshold : float
+        Umbral de significancia (default: 0.05)
+    figsize : tuple
+        Tamaño de la figura
+    """
+    
+    # Calcular matriz de correlación y p-valores
+    n_vars = len(data.columns)
+    corr_matrix = np.zeros((n_vars, n_vars))
+    p_values = np.zeros((n_vars, n_vars))
+    
+    for i in range(n_vars):
+        for j in range(n_vars):
+            if i == j:
+                corr_matrix[i, j] = 1.0
+                p_values[i, j] = 0.0
+            else:
+                corr, p_val = pearsonr(data.iloc[:, i], data.iloc[:, j])
+                corr_matrix[i, j] = corr
+                p_values[i, j] = p_val
+    
+    # Crear figura
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_xlim(-0.5, n_vars - 0.5)
+    ax.set_ylim(-0.5, n_vars - 0.5)
+    ax.set_aspect('equal')
+    
+    # Invertir eje Y para que coincida con la matriz
+    ax.invert_yaxis()
+    
+    # Dibujar cada elipse
+    for i in range(n_vars):
+        for j in range(n_vars):
+            # Saltar diagonal
+            if i == j:
+                continue
+            
+            corr = corr_matrix[i, j]
+            p_val = p_values[i, j]
+            
+            # Solo mostrar correlaciones significativas
+            if p_val > p_threshold:
+                continue
+            
+            # Calcular propiedades de la elipse
+            # El ancho y alto dependen de la fuerza de correlación
+            width = abs(corr) *1.2
+            height = (1 - abs(corr)) *1.2
+            
+            # Ángulo: positivo = /, negativo = \
+            angle = 45 if corr > 0 else -45
+            
+            # Color según signo
+            if corr > 0:
+                color = plt.cm.Blues(abs(corr))
+            else:
+                color = plt.cm.Reds(abs(corr))
+            
+            # Crear y añadir elipse
+            ellipse = Ellipse(
+                xy=(j, i),
+                width=width,
+                height=height,
+                angle=angle,
+                facecolor=color,
+                edgecolor='none',
+                alpha=0.8
+            )
+            ax.add_patch(ellipse)
+    
+    # Configurar ejes
+    ax.set_xticks(range(n_vars))
+    ax.set_yticks(range(n_vars))
+    ax.set_xticklabels(data.columns, rotation=45, ha='right')
+    ax.set_yticklabels(data.columns)
+    
+    # Grid desplazada para que coincida con las celdas
+    # Líneas verticales
+    for i in range(n_vars + 1):
+        ax.axvline(i - 0.5, color='gray', linewidth=0.5, alpha=0.3)
+    # Líneas horizontales
+    for i in range(n_vars + 1):
+        ax.axhline(i - 0.5, color='gray', linewidth=0.5, alpha=0.3)
+    
+    ax.set_axisbelow(True)
+    
+    # Añadir barra de color
+    sm_blue = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=plt.Normalize(vmin=0, vmax=1))
+    sm_red = plt.cm.ScalarMappable(cmap=plt.cm.Reds, norm=plt.Normalize(vmin=0, vmax=1))
+    
+    cbar = plt.colorbar(sm_blue, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Correlación', rotation=270, labelpad=20)
+    
+    plt.title(f"Matriz de Correlación con Elipses Direccionales\n(Solo correlaciones significativas p < {p_threshold})", 
+              fontsize=14, fontweight='bold', pad=20)
+    plt.tight_layout()
+    
+    return fig, ax, corr_matrix, p_values
+
+
+# ===== EJEMPLO DE USO =====
+
+# Establecer semilla para reproducibilidad
+np.random.seed(123)
+
+# Crear datos de ejemplo (similar a la imagen de R)
+n = 100
+data = pd.DataFrame({
+    'var1': np.random.normal(0, 1, n),
+    'var2': np.random.normal(0, 1, n),
+    'var3': np.random.normal(0, 1, n),
+    'var4': np.random.normal(0, 1, n),
+    'var5': np.random.normal(0, 1, n),
+    'var6': np.random.uniform(0, 10, n),
+    'var7': np.random.choice(range(1, 11), n, replace=True),
+    'var8': np.random.normal(0, 1, n),
+    'var9': np.random.normal(0, 0.2, n),
+    'var10': np.random.uniform(-5, 5, n)
+})
+
+# Crear algunas correlaciones artificiales
+data['var4'] = data['var1'] + np.random.normal(0, 0.1, n)  # Positiva fuerte
+data['var5'] = data['var3'] * 0.5 + np.random.normal(0, 0.5, n)  # Positiva media
+data['var9'] = -data['var3'] + np.random.normal(0, 0.2, n)  # Negativa fuerte
+
+# Generar la visualización
+fig, ax, corr_matrix, p_values = plot_correlation_ellipses(data, p_threshold=1)
+plt.show()
+
+# Opcional: Mostrar la matriz de correlación numérica
+print("\nMatriz de Correlación:")
+print(pd.DataFrame(corr_matrix, 
+                   columns=data.columns, 
+                   index=data.columns).round(3))
+
+print("\nP-valores:")
+print(pd.DataFrame(p_values, 
+                   columns=data.columns, 
+                   index=data.columns).round(4))
